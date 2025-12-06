@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MPM 26 快樂畢旅 (濟州島篇)</title>
+    <!-- 載入 Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 載入 Lucide Icons (用於簡潔的圖標) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- 載入 Vue 3 CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        /* 最終指定的顏色變數 */
+        :root {
+            --color-primary: #faf9f5;      /* 外層 Body 背景 (米色) */
+            --color-surface: #FFFFFF;      /* App 內容卡片背景 (純白色) */
+            --color-text: #908e8c;         /* 主要文字/圖標/強調色 */
+            --color-secondary-text: #a9a7a5;/* 次要文字 (稍淺的灰棕) */
+            --color-line: rgb(191, 188, 188); /* 分隔線 (指定的 RGB 顏色) */
+            --color-highlight: #908e8c;    /* 強調色 (與文字同色) */
+        }
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            background-color: var(--color-primary); /* 米色底 */
+            color: var(--color-text);
+        }
+        #app {
+            max-width: 600px;
+            margin: 0 auto;
+            min-height: 100vh;
+            background-color: var(--color-surface); /* 內容區塊設為純白色 */
+            box-shadow: none;
+            border-left: 1px solid var(--color-line);
+            border-right: 1px solid var(--color-line);
+        }
+        /* 隱藏橫向滾動條，但保留滾動功能 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .app-input { @apply border-b border-gray-300 bg-transparent focus:border-[--color-highlight] focus:ring-0 transition duration-200 p-2 text-sm; }
+        .app-button { @apply px-4 py-2 rounded-lg font-medium shadow-sm transition duration-200 ease-in-out; }
+        
+        .guide-tag { @apply text-xs font-semibold px-2 py-0.5 rounded inline-block mr-1 my-1 border border-[--color-line] bg-[--color-primary] text-[--color-text]; }
+        
+        .border-line { border-color: var(--color-line); }
+
+        .weather-forecast-item {
+            font-size: 24px;
+            font-weight: 500;
+            line-height: 1.4; /* 避免溫度數字被切到 */
+        }
+
+        /* 時間軸樣式 */
+        .timeline-container {
+            position: relative;
+            padding-left: 20px; /* 為時間軸線預留空間 */
+        }
+        .timeline-item {
+            position: relative;
+            padding-bottom: 24px; /* 項目間距 */
+        }
+        /* 垂直線 */
+        .timeline-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 1px;
+            height: 100%;
+            background-color: var(--color-line); /* 分隔線顏色 */
+            z-index: 5;
+        }
+        /* 圓點指示器 */
+        .timeline-dot {
+            position: absolute;
+            left: -3px;
+            top: 2px; /* 與時間對齊 */
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background-color: var(--color-text); /* 主體顏色 */
+            z-index: 10;
+        }
+
+        /* 標題居中 */
+        .header-main {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+        }
+
+        /* 日期整排區塊：置中 */
+        .date-container {
+            display: flex;
+            justify-content: center;
+            border-bottom: 1px solid var(--color-line);
+            padding-bottom: 0.5rem; /* pb-2 */
+        }
+
+        /* 裡面的 scroll-wrapper：本身也是 flex 置中 */
+        .date-container .scroll-wrapper {
+            display: flex;
+            justify-content: center;
+            overflow-x: auto;
+            padding-left: 1rem;   /* px-4 */
+            padding-right: 1rem;
+            gap: 1rem;            /* space-x-4 */
+        }
+
+        /* 讓日期列跟上面標題有一點距離 */
+        .date-container > div {
+            padding-top: 0.5rem;  /* pt-2 */
+        }
+
+        /* 確保圖片上的圖標使用白色（如之後有用到） */
+        .white-icon svg {
+            color: white !important;
+        }
+    </style>
+</head>
+<body>
+
+<div id="app" class="flex flex-col">
+    <!-- 頂部極簡標題與 X 按鈕 -->
+    <header class="p-4 pt-6 bg-[--color-surface] sticky top-0 z-20">
+        <div class="flex justify-between items-center">
+            <!-- 關閉按鈕 -->
+            <button @click="closeApp" class="text-[--color-text] p-1">
+                <span v-html="getIconSvg('x', 'w-6 h-6')"></span>
+            </button>
+            
+            <!-- 置中標題 -->
+            <div class="header-main">
+                <div class="text-center space-y-1">
+                    <p class="text-xs font-medium text-[--color-secondary-text] uppercase tracking-widest">
+                        MPM26's GRADUATION TRIP
+                    </p>
+                    <h1 class="text-xl font-bold text-[--color-text]">
+                        濟州旅遊 <span class="text-[--color-text]">2026</span>
+                    </h1>
+                </div>
+            </div>
+            <div class="w-6"></div>
+        </div>
+    </header>
+
+    <!-- 橫向滑動日期選單 -->
+    <div class="bg-[--color-surface] z-10 date-container">
+        <div class="scroll-wrapper">
+            <template v-for="(day, index) in schedule" :key="index">
+                <button
+                    @click="selectedDayIndex = index"
+                    :class="[
+                        'flex-shrink-0 text-center transition-all duration-300 py-1 px-2',
+                        index === selectedDayIndex
+                            ? 'text-[--color-text] font-semibold border-b-2 border-[--color-text]'
+                            : 'text-[--color-secondary-text] font-medium opacity-70 hover:opacity-100'
+                    ]"
+                >
+                    <!-- 星期幾 -->
+                    <span class="block text-sm uppercase">
+                        {{ day.dateText.split('（')[1].replace('）', '') }}
+                    </span>
+                    <!-- 日期 -->
+                    <span class="block text-xl mt-0.5">
+                        {{ day.dateText.split('/')[2].split('（')[0] }}
+                    </span>
+                </button>
+            </template>
+        </div>
+    </div>
+    
+    <!-- 主內容區塊 -->
+    <main class="flex-grow bg-[--color-surface]">
+        <!-- 主選單 (行程 vs 工具) -->
+        <div class="bg-[--color-surface] z-10 border-b border-line pb-4 px-4 pt-4">
+            <div class="flex justify-center">
+                <button @click="currentView = 'schedule'"
+                        :class="[
+                            'py-2 text-base font-bold transition-all duration-200 mr-6',
+                            currentView === 'schedule'
+                                ? 'text-[--color-text] border-b-2 border-[--color-highlight]'
+                                : 'text-[--color-secondary-text] opacity-70 hover:opacity-100'
+                        ]">
+                    每日行程
+                </button>
+                <button @click="currentView = 'info'"
+                        :class="[
+                            'py-2 text-base font-bold transition-all duration-200',
+                            currentView === 'info'
+                                ? 'text-[--color-text] border-b-2 border-[--color-highlight]'
+                                : 'text-[--color-secondary-text] opacity-70 hover:opacity-100'
+                        ]">
+                    旅遊工具
+                </button>
+            </div>
+        </div>
+
+        <!-- 每日行程 View -->
+        <template v-if="currentView === 'schedule'">
+            <div v-if="currentDay" class="space-y-4 p-4">
+
+                <!-- 天氣資訊卡片 -->
+                <div class="p-4 bg-[--color-primary] rounded-lg border border-line flex flex-col space-y-3">
+                    <h3 class="text-xl font-bold text-[--color-text]">濟州市</h3>
+                    <p class="text-sm font-light text-[--color-secondary-text] mb-2">
+                        未來 24 小時預報 (模擬)
+                    </p>
+                    
+                    <div class="flex overflow-x-scroll no-scrollbar space-x-6">
+                        <!-- 現在天氣 -->
+                        <div class="flex-shrink-0 text-center text-xs">
+                            <p class="text-[--color-text] font-semibold text-sm mb-1">現在</p>
+                            <span class="block my-1 text-[--color-text] mx-auto">
+                                <span v-html="getForecastIcon('current', 'w-6 h-6')"></span>
+                            </span>
+                            <p v-if="currentDay.weather.temp !== null"
+                               class="weather-forecast-item font-light text-[--color-text]">
+                                {{ Math.round(currentDay.weather.temp) }}°
+                            </p>
+                            <p v-else class="text-xs text-[--color-secondary-text]">N/A</p>
+                        </div>
+
+                        <!-- 模擬未來天氣 -->
+                        <div v-for="i in 5" :key="i" class="flex-shrink-0 text-center text-xs">
+                            <p class="text-[--color-text] font-semibold text-sm mb-1">
+                                {{ (i * 3) + 6 }}:00
+                            </p>
+                            <span class="block my-1 text-[--color-text] mx-auto">
+                                <span v-html="getForecastIcon(i % 3, 'w-6 h-6')"></span>
+                            </span>
+                            <p class="weather-forecast-item font-light text-[--color-text]">
+                                {{ Math.round(currentDay.weather.temp) + (i % 3 - 1) }}°
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 今日行程卡片（含時間軸） -->
+                <div class="p-4 bg-[--color-primary] rounded-lg border border-line">
+                    <h3 class="text-sm font-bold flex items-center text-[--color-text] mb-3">
+                        <span v-html="getIconSvg('calendar', 'w-4 h-4 mr-2')"></span>
+                        今日行程
+                    </h3>
+
+                    <div class="timeline-container divide-y-0">
+                        <div v-for="(activity, aIndex) in currentDay.activities"
+                             :key="aIndex"
+                             class="timeline-item">
+                            
+                            <div class="timeline-dot"></div>
+
+                            <div class="flex items-start w-full" :class="{'opacity-60': !activity.time}">
+                                <!-- 左側：時間 -->
+                                <div class="flex-shrink-0 w-20 flex justify-center items-start -mt-1">
+                                    <p class="text-lg font-bold text-[--color-text] leading-tight">
+                                        {{ activity.time || '' }}
+                                    </p>
+                                </div>
+
+                                <!-- 右側：活動詳情（只顯示地點，精簡版） -->
+                                <div class="flex-grow pl-6 -mt-1">
+                                    <div class="flex justify-between items-start">
+                                        <div class="flex-grow pr-4">
+                                            <p class="font-semibold text-base text-[--color-text]">
+                                                {{ activity.location }}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 旅遊攻略（放在最底部） -->
+                <div class="p-4 bg-[--color-primary] rounded-lg border border-line">
+                    <h3 class="flex items-center text-sm font-bold mb-2 text-[--color-text]">
+                        <span v-html="getIconSvg('book-open', 'w-4 h-4 mr-1')"></span>
+                        Day {{ selectedDayIndex + 1 }} 旅遊攻略
+                    </h3>
+
+                    <div v-if="currentDay.guide"
+                         class="text-sm text-[--color-secondary-text] guide-content"
+                         v-html="parseGuideText(currentDay.guide)">
+                    </div>
+
+                    <div v-else class="text-sm text-gray-400 italic">
+                        <span v-html="getIconSvg('info', 'w-4 h-4 mr-1')"></span>
+                        此日行程暫無攻略資訊。
+                    </div>
+                </div>
+
+            </div>
+        </template>
+
+        <!-- 旅遊工具 View -->
+        <template v-if="currentView === 'info'">
+            <main class="p-4 pt-6 flex-grow bg-[--color-surface] space-y-6">
+                <h2 class="text-xl font-bold border-b border-line pb-2 text-[--color-text]">
+                    重要旅遊工具與資訊
+                </h2>
+                
+                <!-- 航班資訊（寫死＋時差說明） -->
+                <div class="p-4 bg-[--color-primary] rounded-lg border border-line space-y-2">
+                    <h3 class="text-sm font-bold flex items-center text-[--color-text] border-b border-line pb-2 mb-2">
+                        <span v-html="getIconSvg('plane', 'w-4 h-4 mr-2')"></span>
+                        航班資訊
+                    </h3>
+                    <p class="text-xs font-medium text-[--color-secondary-text]">去程時間／地點</p>
+                    <p class="text-sm font-semibold text-[--color-text]">
+                        2026/01/31 02:50　TPE → 濟州 (CJU)
+                    </p>
+
+                    <p class="text-xs font-medium text-[--color-secondary-text] mt-3">回程時間／地點</p>
+                    <p class="text-sm font-semibold text-[--color-text]">
+                        2026/02/03 22:00　CJU → 台北 (TPE)
+                    </p>
+
+                    <div class="mt-3 text-xs text-[--color-secondary-text] border-t border-line pt-2 leading-relaxed">
+                        <p class="font-medium text-[--color-text] mb-1">時差資訊</p>
+                        <p>・台灣（台北）時區：GMT+8</p>
+                        <p>・韓國濟州時區：GMT+9</p>
+                        <p>・濟州比台灣快 1 小時，例如台灣 10:00，相當於濟州 11:00。</p>
+                    </div>
+                </div>
+
+                <!-- 住宿資訊 -->
+                <div class="p-4 bg-[--color-primary] rounded-lg border border-line space-y-2">
+                    <h3 class="text-sm font-bold flex items-center text-[--color-text] border-b border-line pb-2 mb-2">
+                        <span v-html="getIconSvg('hotel', 'w-4 h-4 mr-2')"></span>
+                        住宿資訊
+                    </h3>
+                    <p class="text-sm font-semibold text-[--color-text]">
+                        濟州樂天城市酒店 (Lotte City Hotel Jeju)
+                    </p>
+                    <p class="text-xs text-[--color-secondary-text]">
+                        地址：272, Doryeong-ro, Jeju-si, Jeju-do
+                    </p>
+                    <p class="text-xs text-[--color-secondary-text]">
+                        電話：+82 64-730-1000
+                    </p>
+                </div>
+
+                <!-- 緊急聯絡電話 -->
+                <div class="p-4 bg-[--color-primary] rounded-lg border border-line space-y-2">
+                    <h3 class="text-sm font-bold flex items-center text-[--color-text] border-b border-line pb-2 mb-2">
+                        <span v-html="getIconSvg('phone-call', 'w-4 h-4 mr-2')"></span>
+                        緊急聯絡電話
+                    </h3>
+                    <p class="text-sm text-[--color-text]">韓國報警：112</p>
+                    <p class="text-sm text-[--color-text]">韓國救護／消防：119</p>
+                    <p class="text-sm text-[--color-text]">旅行社／導遊：新鼎中韓國際旅行社 897-86-00413</p>
+                </div>
+
+                <!-- 每人費用一覽 -->
+                <div class="p-4 bg-[--color-primary] rounded-lg border border-line space-y-3">
+                    <h3 class="text-sm font-bold text-[--color-text] border-b border-line pb-2 mb-2">
+                        每人費用一覽（含門票／導遊／接駁／住宿／手續費）
+                    </h3>
+
+                    <!-- 單人房 -->
+                    <div class="text-sm">
+                        <p class="font-semibold text-[--color-text]">單人房（Single Room）</p>
+                        <p class="ml-3 text-[--color-secondary-text]">詠立：NT$ 13,248</p>
+                        <p class="ml-3 text-[--color-secondary-text]">每人：NT$ 14,071</p>
+                    </div>
+
+                    <!-- 雙人房 -->
+                    <div class="text-sm">
+                        <p class="font-semibold text-[--color-text] mt-2">雙人房（Twin Room）</p>
+                        <p class="ml-3 text-[--color-secondary-text]">每人：NT$ 9,301</p>
+                    </div>
+
+                    <!-- 說明 -->
+                    <div class="text-xs mt-3 text-[--color-secondary-text] border-t border-line pt-2 leading-relaxed">
+                        固定費用 1,250（門票＋手續費）  
+                        <br>｜導遊與接駁車：詠立 2,438／其他人 3,261  
+                        <br>｜住宿：單人 9,560／雙人 4,790  
+                        <br>※ 多退少補
+                    </div>
+                </div>
+
+                <!-- 匯款資訊（帳號＋複製按鈕） -->
+                <div class="p-4 bg-[--color-primary] rounded-lg border border-line space-y-2">
+                    <h3 class="text-sm font-bold flex items-center text-[--color-text] border-b border-line pb-2 mb-2">
+                        <span v-html="getIconSvg('credit-card', 'w-4 h-4 mr-2')"></span>
+                        匯款資訊
+                    </h3>
+
+                    <p class="text-xs font-semibold text-[--color-text]">
+                        永豐銀行 (807)
+                    </p>
+
+                    <!-- 帳號＋複製 icon -->
+                    <div class="relative mt-1">
+                        <div class="w-full bg-white border border-line rounded-lg px-3 py-1.5">
+                            <span class="text-sm font-mono tracking-widest text-[--color-text]">
+                                06801800578832
+                            </span>
+                        </div>
+
+                        <!-- 右側複製按鈕 -->
+                        <button
+                            @click="copyText('06801800578832')"
+                            class="absolute right-2 top-1/2 -translate-y-1/2 p-1
+                                   text-[--color-secondary-text] hover:text-[--color-text] transition"
+                            title="複製帳號"
+                        >
+                            <span v-html="getIconSvg('copy', 'w-4 h-4')"></span>
+                        </button>
+                    </div>
+
+                    <p v-if="copySuccess" class="text-xs text-green-700 mt-1">
+                        已複製！
+                    </p>
+                </div>
+
+                <div class="pt-4 h-8"></div>
+            </main>
+        </template>
+    </main>
+</div>
+
+<script>
+const { createApp, ref, computed } = Vue;
+const lucide = window.lucide;
+
+// API Keys & Constants
+const WEATHER_API_KEY = "006c1dcc7d587b1451f371761e18d095"; // OpenWeather API Key
+const JEJU_CITY_ID = "1846266"; // Jeju-si ID
+
+// 行程類型標籤（目前只保留在資料裡，不再顯示）
+const typeLabels = {
+    attraction: '景點',
+    restaurant: '美食',
+    transport: '交通/購物'
+};
+
+// 初始行程資料
+const initialSchedule = [
+    {
+        dateText: "Day 1｜2026/01/31（六）",
+        weather: { temp: null, description: '載入中...', icon: 'cloud' },
+        guide: "Day 1 旅遊重點環繞濟州市區及周邊。**彩虹海岸道路**和**龍頭岩**是絕佳的拍照點，能快速感受到濟州的海島風情。**漢拏山 1100 高地**若在一月底可能有雪景，但需注意保暖，路面可能結冰。\n\n<span class='guide-tag tag-food'>必吃美食</span>: 晚餐的**黑毛豬一條街**是重頭戲，這裡集合了多家著名的黑豬肉烤肉店。 <span class='guide-tag tag-menu'>必點菜單</span>: 建議點選包含五花肉、頸肉的多人套餐，搭配濟州特產的「漢拏山燒酒」風味更佳。\n\n攻略: 樂天免稅店建議事先在線上購買，抵達機場後直接取貨更省時。漢拏山 1100 高地是行車可達的最高點，風景優美，但若想登頂，需提前預約。",
+        activities: [
+            { time: "10:00", location: "抵達濟州機場、通關", type: "transport" },
+            { time: "", location: "彩虹海岸道路", type: "attraction" },
+            { time: "", location: "龍頭岩", type: "attraction" },
+            { time: "", location: "樂天免稅店", type: "transport" },
+            { time: "", location: "漢拏山 1100 高地", type: "attraction" },
+            { time: "", location: "七星路、黑毛豬一條街", type: "restaurant" },
+            { time: "", location: "回飯店休息", type: "transport" },
+        ],
+    },
+    {
+        dateText: "Day 2｜2026/02/01（日）",
+        weather: { temp: null, description: '載入中...', icon: 'cloud' },
+        guide: "今天的行程主要集中在東部內陸地區，是體驗濟州自然魅力的好選擇。**淺村小火車 (Jeju Eco-Land)** 乘坐復古火車穿梭森林，適合放鬆身心。**山君不離 (Sangumburi)** 是一個獨特的火山口，尤其在秋季芒草最盛，但在冬季也能欣賞到蕭瑟之美。\n\n<span class='guide-tag tag-food'>必吃美食</span>: **童話村**或附近可能沒有大量餐廳，建議在前往Eco-Land或山君不離之前，先在濟州市區解決午餐。可以嘗試濟州當地的**帶魚湯**或**鮑魚粥**。 <span class='guide-tag tag-menu'>必點菜單</span>: **鮑魚粥**被視為滋補養生。\n\n攻略: 參觀山君不離和Eco-Land時，建議穿著舒適鞋子。**石頭爺爺公園**是了解濟州文化和多爾哈魯邦傳說的好地方，記得摸摸爺爺的鼻子、肚子或耳朵，據說可以帶來好運！",
+        activities: [
+            { time: "06:30", location: "起床、早餐", type: "transport" },
+            { time: "", location: "淺村小火車 Jeju Eco-Land", type: "attraction" },
+            { time: "", location: "山君不離 Sangumburi", type: "attraction" },
+            { time: "", location: "童話村", type: "restaurant" },
+            { time: "", location: "石頭爺爺公園", type: "attraction" },
+            { time: "", location: "回飯店", type: "transport" },
+        ],
+    },
+    {
+        dateText: "Day 3｜2026/02/02（一）",
+        weather: { temp: null, description: '載入中...', icon: 'cloud' },
+        guide: "Day 3 是東線海岸的經典之旅。**牛島半日遊**需要注意船班時間，特別是冬季。牛島有「濟州的縮小版」之稱，非常值得一遊。**城山日出峰**是世界自然遺產，攀登難度不高，是觀賞日出或日落的絕佳地點。\n\n<span class='guide-tag tag-food'>必吃美食</span>: 在**牛島**務必要嚐試當地的特產。 <span class='guide-tag tag-menu'>必點菜單</span>: **花生冰淇淋**和**漢拏山炒飯**是島上必點。**牛島海鮮麵**也是不錯的選擇。在**城山日出峰**附近則可享用海鮮料理。\n\n攻略: 搭乘往返牛島的船票需要填寫乘船申報書，記得攜帶護照或外國人登錄證。**城邑民俗村**是韓劇《大長今》的拍攝地，保留了傳統濟州石屋，是了解民俗文化的好去處。",
+        activities: [
+            { time: "06:30", location: "起床、早餐", type: "transport" },
+            { time: "", location: "牛島半日遊+午餐", type: "attraction" },
+            { time: "", location: "城山日出峰", type: "attraction" },
+            { time: "", location: "涉地可支", type: "attraction" },
+            { time: "", location: "城邑民俗村", type: "attraction" },
+            { time: "", location: "回飯店", type: "transport" },
+        ],
+    },
+    {
+        dateText: "Day 4｜2026/02/03（二）",
+        weather: { temp: null, description: '載入中...', icon: 'cloud' },
+        guide: "最後一天的行程集中在西歸浦市和西邊海岸。**O’Sulloc 茶博物館**和茶田是韓國綠茶文化的代表，風景如畫。**柱狀節理帶**和**正房瀑布**展示了濟州的火山地質奇觀。**Arte Museum** 是新興的光影藝術館，是室內拍照的好去處。\n\n<span class='guide-tag tag-gift'>必買伴手禮</span>: 在**O’Sulloc 茶博物館**可以購買各種綠茶產品、茶包或點心，是送禮自用兩相宜的**必買伴手禮**。 <span class='guide-tag tag-food'>必吃美食</span>: **涯月海邊**附近有許多時尚咖啡廳，例如前 G-Dragon 的 Monsant De Aewol， <span class='guide-tag tag-menu'>必點菜單</span>: 建議點一杯特色的**柑橘拿鐵**。\n\n攻略: 涯月海邊適合悠閒散步，咖啡街人潮較多。正房瀑布是亞洲唯一直接流入海中的瀑布，景色壯觀。請務必預留充足時間前往機場。",
+        activities: [
+            { time: "06:30", location: "起床、早餐", type: "transport" },
+            { time: "", location: "涯月海邊", type: "attraction" },
+            { time: "", location: "O’Sulloc 茶博物館／Seogwang 茶田", type: "attraction" },
+            { time: "", location: "柱狀節理帶", type: "attraction" },
+            { time: "", location: "正房瀑布", type: "attraction" },
+            { time: "", location: "Arte Museum Island Jeju", type: "attraction" },
+            { time: "", location: "機場、搭機返程", type: "transport" },
+        ],
+    },
+];
+
+const App = {
+    setup() {
+        const schedule = ref(initialSchedule);
+        const selectedDayIndex = ref(0);
+        const currentView = ref('schedule');
+        const copySuccess = ref(false);
+
+        const currentDay = computed(() => schedule.value[selectedDayIndex.value]);
+
+        const getIconSvg = (iconName, classes = '', colorOverride = 'var(--color-text)') => {
+            const IconFunction = lucide.icons[iconName];
+            if (IconFunction) {
+                return IconFunction({ class: classes, color: colorOverride }).toString();
+            }
+            return '';
+        };
+
+        const getForecastIcon = (codeOrIndex, classes = '') => {
+            let iconName;
+            let colorOverride = 'var(--color-text)';
+
+            if (codeOrIndex === 'current' && currentDay.value.weather.icon) {
+                const weatherIconCode = currentDay.value.weather.icon.substring(0, 2);
+                switch (weatherIconCode) {
+                    case '01': iconName = 'sun'; break;
+                    case '02': iconName = 'cloud-sun'; break;
+                    case '03':
+                    case '04': iconName = 'cloud'; break;
+                    case '09': iconName = 'cloud-rain'; break;
+                    case '10': iconName = 'cloud-drizzle'; break;
+                    case '11': iconName = 'cloud-lightning'; break;
+                    case '13': iconName = 'cloud-snow'; break;
+                    case '50': iconName = 'cloud-fog'; break;
+                    default: iconName = 'sun';
+                }
+            } else {
+                const index = parseInt(codeOrIndex);
+                switch (index % 3) {
+                    case 0: iconName = 'sun'; break;
+                    case 1: iconName = 'cloud'; break;
+                    case 2: iconName = 'cloud-sun'; break;
+                    default: iconName = 'sun';
+                }
+            }
+
+            return getIconSvg(iconName, classes, colorOverride);
+        };
+
+        const chineseDayNumber = (num) => {
+            const map = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+            return map[num] || num.toString();
+        };
+
+        const parseGuideText = (text) => {
+            if (!text) return text;
+            text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            text = text.replace(/\n/g, '<br>');
+            return text;
+        };
+
+        const closeApp = () => {
+            console.log("App 關閉或返回主畫面 (模擬操作)");
+        };
+
+        const fetchWeather = async () => {
+            const url = `https://api.openweathermap.org/data/2.5/weather?id=${JEJU_CITY_ID}&units=metric&lang=zh_tw&appid=${WEATHER_API_KEY}`;
+            try {
+                let response;
+                let data;
+                let attempts = 0;
+                const maxAttempts = 3;
+
+                while (attempts < maxAttempts) {
+                    attempts++;
+                    try {
+                        response = await fetch(url);
+                        if (response.ok) {
+                            data = await response.json();
+                            break;
+                        }
+                    } catch (e) {
+                        console.warn(`Weather API attempt ${attempts} failed: ${e.message}`);
+                    }
+                    if (attempts < maxAttempts) {
+                        const delay = Math.pow(2, attempts) * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                }
+
+                if (!response || !response.ok) {
+                    throw new Error(`Failed to fetch weather after ${maxAttempts} attempts.`);
+                }
+                
+                const temp = data.main.temp;
+                const description = data.weather[0].description;
+                const icon = data.weather[0].icon;
+
+                schedule.value.forEach(day => {
+                    day.weather = {
+                        temp: temp,
+                        description: description.charAt(0).toUpperCase() + description.slice(1),
+                        icon: icon
+                    };
+                });
+
+            } catch (error) {
+                console.error("無法獲取天氣資訊:", error);
+                schedule.value.forEach(day => {
+                    day.weather = {
+                        temp: 'N/A',
+                        description: '天氣服務失敗',
+                        icon: '⚠️'
+                    };
+                });
+            }
+        };
+
+        // 複製帳號文字
+        const copyText = async (text) => {
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    // 簡單 fallback
+                    const textarea = document.createElement('textarea');
+                    textarea.value = text;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                }
+                copySuccess.value = true;
+                setTimeout(() => { copySuccess.value = false; }, 1500);
+            } catch (e) {
+                console.error('複製失敗', e);
+            }
+        };
+
+        fetchWeather();
+
+        return {
+            schedule,
+            selectedDayIndex,
+            currentDay,
+            currentView,
+            copySuccess,
+            getIconSvg,
+            getForecastIcon,
+            chineseDayNumber,
+            parseGuideText,
+            closeApp,
+            copyText
+        };
+    }
+};
+
+window.onload = function () {
+    createApp(App).mount('#app');
+};
+</script>
+
+</body>
+</html>
