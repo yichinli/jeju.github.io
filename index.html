@@ -417,6 +417,23 @@
                     </p>
                 </div>
 
+                <!-- 已收到款名單 -->
+<div class="p-4 bg-[--color-primary] rounded-lg border border-line space-y-2">
+    <h3 class="text-sm font-bold flex items-center text-[--color-text] border-b border-line pb-2 mb-2">
+        <span v-html="getIconSvg('check-circle', 'w-4 h-4 mr-2')"></span>
+        已收到款名單
+    </h3>
+
+    <p class="text-xs text-[--color-secondary-text]">
+        以下為已確認完成匯款的同學：
+    </p>
+
+    <ul class="text-sm text-[--color-text] leading-relaxed ml-1 space-y-1">
+        <li>✓ 黃詠立</li>
+    </ul>
+</div>
+
+
                 <div class="pt-4 h-8"></div>
             </main>
         </template>
